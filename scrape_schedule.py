@@ -12,6 +12,7 @@ import qrcode
 from io import BytesIO
 import tempfile
 import os
+import sys
 
 def scrape_schedule():
     url = "https://symposium.orfe.princeton.edu"
@@ -22,6 +23,11 @@ def scrape_schedule():
         page.wait_for_timeout(5000)
         content = page.content()
         browser.close()
+    
+    # Check for maintenance mode
+    if "Maintenance Mode" in content:
+        raise Exception("The symposium website is currently in Maintenance Mode and the schedule is unavailable. Please try again later.")
+    
     soup = BeautifulSoup(content, 'html.parser')
     text = soup.get_text()
     lines = [line.strip() for line in text.split('\n') if line.strip()]
@@ -201,7 +207,14 @@ if __name__ == "__main__":
     parser.add_argument('--qr-codes', action='store_true', help="Include QR codes linking to each room's webpage anchor.")
     args = parser.parse_args()
     
-    rooms = scrape_schedule()
+    try:
+        rooms = scrape_schedule()
+    except Exception as e:
+        if "Maintenance Mode" in str(e):
+            print(f"Error: {e}")
+            sys.exit(1)
+        else:
+            raise
     
     if args.hash:
         hash_obj = hashlib.sha256(json.dumps(rooms, sort_keys=True).encode())
