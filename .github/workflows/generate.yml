@@ -170,9 +170,6 @@ jobs:
         if [ "${{ github.event.inputs.include_title }}" = "true" ]; then
           options="$options --include-title"
         fi
-        if [ "${{ github.event.inputs.include_title }}" = "false" ]; then
-          options="$options --no-title"
-        fi
         if [ "${{ github.event.inputs.qr_codes }}" = "true" ]; then
           options="$options --qr-codes"
         fi
