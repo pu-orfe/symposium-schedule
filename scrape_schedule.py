@@ -2,12 +2,16 @@ import requests
 from bs4 import BeautifulSoup
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from playwright.sync_api import sync_playwright
 import argparse
 import json
 import hashlib
+import qrcode
+from io import BytesIO
+import tempfile
+import os
 
 def scrape_schedule():
     url = "https://symposium.orfe.princeton.edu"
@@ -52,7 +56,7 @@ def scrape_schedule():
         i += 1
     return rooms
 
-def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_title=True):
+def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_title=True, qr_codes=False):
     doc = SimpleDocTemplate(filename, pagesize=letter)
     styles = getSampleStyleSheet()
     title_style = styles['Title']
@@ -76,14 +80,35 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
         spaceAfter=12,
     )
     
+    url = "https://symposium.orfe.princeton.edu"
+    
     story = []
     if include_title:
         story.append(Paragraph("Class of 2026 ORFE Thesis Symposium Schedule", title_style))
         story.append(Spacer(1, 12))
     
+    temp_files = []  # Track temporary files for cleanup
+    
     for room, data in sorted(rooms.items()):
         room_elements = []
         room_elements.append(Paragraph(f"Room {room} - Sherrerd Hall", room_style))
+        
+        if qr_codes:
+            qr_data = f"{url}#_{room}---Sherrerd-Hall"
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(qr_data)
+            qr.make(fit=True)
+            qr_img = qr.make_image(fill_color="black", back_color="white")
+            # Save to temporary file
+            temp_fd, temp_path = tempfile.mkstemp(suffix='.png')
+            temp_files.append(temp_path)  # Track for cleanup
+            try:
+                qr_img.save(temp_path, format='PNG')
+                room_elements.append(Image(temp_path, 50, 50))  # 50x50 pixels size
+            finally:
+                os.close(temp_fd)  # Close the file descriptor
+            room_elements.append(Spacer(1, 6))
+        
         if data['advisors']:
             room_elements.append(Paragraph(data['advisors'], table_style))
         if data['graders']:
@@ -143,6 +168,13 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
             story.extend(room_elements)
     
     doc.build(story)
+    
+    # Clean up temporary files
+    for temp_path in temp_files:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass  # Ignore if file already deleted
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scrape symposium schedule and generate PDF or JSON.")
@@ -151,6 +183,7 @@ if __name__ == "__main__":
     parser.add_argument('--show-headers', action='store_true', help="Show table headers (Time, Presenter) in PDF.")
     parser.add_argument('--hash', action='store_true', help="Output hash of the schedule data instead of generating files.")
     parser.add_argument('--no-title', action='store_true', help="Exclude the title from PDF output.")
+    parser.add_argument('--qr-codes', action='store_true', help="Include QR codes linking to each room's webpage anchor.")
     args = parser.parse_args()
     
     rooms = scrape_schedule()
@@ -164,4 +197,4 @@ if __name__ == "__main__":
             f.write(json_output)
         print(json_output)
     else:
-        create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title)
+        create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title, qr_codes=args.qr_codes)
