@@ -211,5 +211,7 @@ if __name__ == "__main__":
         with open("symposium_schedule.json", "w") as f:
             f.write(json_output)
         print(json_output)
+        # Also generate PDF when --json is specified
+        create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title, qr_codes=args.qr_codes)
     else:
         create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title, qr_codes=args.qr_codes)
