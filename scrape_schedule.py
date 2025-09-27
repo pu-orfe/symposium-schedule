@@ -105,10 +105,10 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
                 qr_img.save(temp_path, format='PNG')
                 # Create a table with room title and QR code side by side
                 room_title = Paragraph(f"Room {room} - Sherrerd Hall", room_style)
-                qr_image = Image(temp_path, 40, 40)  # Slightly smaller QR code
+                qr_image = Image(temp_path, 50, 50)  # 25% larger QR code
                 # Create table data with room title left-aligned and QR code right-aligned
                 header_data = [[room_title, qr_image]]
-                header_table = Table(header_data, colWidths=[400, 50])  # Room title gets more space
+                header_table = Table(header_data, colWidths=[400, 65])  # Room title gets more space, QR code needs more width
                 header_table.setStyle(TableStyle([
                     ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Room title left-aligned
                     ('ALIGN', (1, 0), (1, 0), 'RIGHT'),  # QR code right-aligned
