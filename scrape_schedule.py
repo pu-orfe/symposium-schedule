@@ -52,7 +52,7 @@ def scrape_schedule():
         i += 1
     return rooms
 
-def create_pdf(rooms, filename, keep_together=True, show_headers=False):
+def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_title=True):
     doc = SimpleDocTemplate(filename, pagesize=letter)
     styles = getSampleStyleSheet()
     title_style = styles['Title']
@@ -77,8 +77,9 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False):
     )
     
     story = []
-    story.append(Paragraph("Class of 2026 ORFE Thesis Symposium Schedule", title_style))
-    story.append(Spacer(1, 12))
+    if include_title:
+        story.append(Paragraph("Class of 2026 ORFE Thesis Symposium Schedule", title_style))
+        story.append(Spacer(1, 12))
     
     for room, data in sorted(rooms.items()):
         room_elements = []
@@ -149,6 +150,7 @@ if __name__ == "__main__":
     parser.add_argument('--allow-breaks', action='store_true', help="Allow page breaks within room sections (default: keep rooms together).")
     parser.add_argument('--show-headers', action='store_true', help="Show table headers (Time, Presenter) in PDF.")
     parser.add_argument('--hash', action='store_true', help="Output hash of the schedule data instead of generating files.")
+    parser.add_argument('--no-title', action='store_true', help="Exclude the title from PDF output.")
     args = parser.parse_args()
     
     rooms = scrape_schedule()
@@ -162,4 +164,4 @@ if __name__ == "__main__":
             f.write(json_output)
         print(json_output)
     else:
-        create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers)
+        create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title)

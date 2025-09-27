@@ -19,6 +19,14 @@ on:
         options:
         - 'true'
         - 'false'
+      include_title:
+        description: 'Include title in PDF'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
 
 jobs:
   generate:
@@ -83,6 +91,12 @@ jobs:
         fi
         if [ "${{ github.event.inputs.allow_breaks }}" = "true" ]; then
           options="$options --allow-breaks"
+        fi
+        if [ "${{ github.event.inputs.include_title }}" = "true" ]; then
+          options="$options --include-title"
+        fi
+        if [ "${{ github.event.inputs.include_title }}" = "false" ]; then
+          options="$options --no-title"
         fi
         python scrape_schedule.py $options
         
