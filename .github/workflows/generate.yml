@@ -37,6 +37,14 @@ on:
         options:
         - 'true'
         - 'false'
+      force_generate:
+        description: 'Force generation and release even if no changes detected'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
 
 jobs:
   test:
@@ -171,21 +179,19 @@ jobs:
         python scrape_schedule.py $options
         
     - name: Upload PDF artifact
-      if: steps.compare.outputs.changed == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: symposium-schedule-pdf
         path: symposium_schedule.pdf
         
     - name: Upload JSON artifact
-      if: steps.compare.outputs.changed == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: symposium-schedule-json
         path: symposium_schedule.json
         
     - name: Create Release
-      if: steps.compare.outputs.changed == 'true'
+      if: steps.compare.outputs.changed == 'true' || github.event.inputs.force_generate == 'true'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: schedule-${{ github.run_number }}-${{ github.run_attempt }}
@@ -198,6 +204,7 @@ jobs:
           - `symposium_schedule.json` - JSON data for programmatic access
           
           Generated from commit: ${{ github.sha }}
+          ${{ github.event.inputs.force_generate == 'true' && '\n**Forced Generation:** This release was manually triggered despite no schedule changes.' || '' }}
         files: |
           symposium_schedule.pdf
           symposium_schedule.json
