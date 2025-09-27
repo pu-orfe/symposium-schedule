@@ -113,6 +113,10 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
                     ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Room title left-aligned
                     ('ALIGN', (1, 0), (1, 0), 'RIGHT'),  # QR code right-aligned
                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertically center both
+                    ('LEFTPADDING', (0, 0), (0, 0), 0),   # Remove left padding from room title
+                    ('RIGHTPADDING', (0, 0), (0, 0), 0),  # Remove right padding from room title
+                    ('TOPPADDING', (0, 0), (-1, -1), 0),  # Remove vertical padding
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                 ]))
                 room_elements.append(header_table)
             finally:
