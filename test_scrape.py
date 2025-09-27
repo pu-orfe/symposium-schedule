@@ -130,5 +130,26 @@ class TestScrapeSchedule(unittest.TestCase):
         self.assertTrue(args.no_title)
         self.assertTrue(args.qr_codes)
 
+    @patch('scrape_schedule.sync_playwright')
+    def test_maintenance_mode_detection(self, mock_playwright):
+        """Test that maintenance mode is properly detected and raises exception."""
+        # Mock the page content to contain maintenance mode text
+        mock_page = MagicMock()
+        mock_page.content.return_value = "<html><body>The website is currently in Maintenance Mode. Please check back later.</body></html>"
+        
+        mock_browser = MagicMock()
+        mock_browser.new_page.return_value = mock_page
+        
+        mock_context = MagicMock()
+        mock_context.chromium.launch.return_value = mock_browser
+        mock_playwright.return_value.__enter__.return_value = mock_context
+        
+        # Test that maintenance mode raises exception
+        with self.assertRaises(Exception) as context:
+            scrape_schedule()
+        
+        self.assertIn("Maintenance Mode", str(context.exception))
+        self.assertIn("unavailable", str(context.exception))
+
 if __name__ == '__main__':
     unittest.main()
