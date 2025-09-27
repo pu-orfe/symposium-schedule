@@ -160,7 +160,7 @@ jobs:
         
     - name: Generate schedule
       run: |
-        options=""
+        options="--json"
         if [ "${{ github.event.inputs.show_headers }}" = "true" ]; then
           options="$options --show-headers"
         fi
