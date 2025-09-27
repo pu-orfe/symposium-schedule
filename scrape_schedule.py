@@ -91,7 +91,6 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
     
     for room, data in sorted(rooms.items()):
         room_elements = []
-        room_elements.append(Paragraph(f"Room {room} - Sherrerd Hall", room_style))
         
         if qr_codes:
             qr_data = f"{url}#_{room}---Sherrerd-Hall"
@@ -104,10 +103,22 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
             temp_files.append(temp_path)  # Track for cleanup
             try:
                 qr_img.save(temp_path, format='PNG')
-                room_elements.append(Image(temp_path, 50, 50))  # 50x50 pixels size
+                # Create a table with room title and QR code side by side
+                room_title = Paragraph(f"Room {room} - Sherrerd Hall", room_style)
+                qr_image = Image(temp_path, 40, 40)  # Slightly smaller QR code
+                # Create table data with room title left-aligned and QR code right-aligned
+                header_data = [[room_title, qr_image]]
+                header_table = Table(header_data, colWidths=[400, 50])  # Room title gets more space
+                header_table.setStyle(TableStyle([
+                    ('ALIGN', (0, 0), (0, 0), 'LEFT'),   # Room title left-aligned
+                    ('ALIGN', (1, 0), (1, 0), 'RIGHT'),  # QR code right-aligned
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),  # Vertically center both
+                ]))
+                room_elements.append(header_table)
             finally:
                 os.close(temp_fd)  # Close the file descriptor
-            room_elements.append(Spacer(1, 6))
+        else:
+            room_elements.append(Paragraph(f"Room {room} - Sherrerd Hall", room_style))
         
         if data['advisors']:
             room_elements.append(Paragraph(data['advisors'], table_style))
