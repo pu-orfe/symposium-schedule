@@ -41,7 +41,41 @@ jobs:
     - name: Install Playwright browsers
       run: python -m playwright install chromium
       
+    - name: Check for changes
+      id: check_changes
+      run: |
+        python scrape_schedule.py --hash > current_hash.txt
+        echo "current_hash=$(cat current_hash.txt)" >> $GITHUB_OUTPUT
+        
+    - name: Get cached hash
+      id: cache_hash
+      uses: actions/cache@v4
+      with:
+        path: previous_hash.txt
+        key: schedule-hash-${{ steps.check_changes.outputs.current_hash }}
+        restore-keys: |
+          schedule-hash-
+          
+    - name: Compare hashes
+      id: compare
+      run: |
+        if [ -f previous_hash.txt ]; then
+          previous=$(cat previous_hash.txt)
+          current=$(cat current_hash.txt)
+          if [ "$previous" = "$current" ]; then
+            echo "No changes detected, skipping generation"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected, proceeding with generation"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "No previous hash found, proceeding with generation"
+          echo "changed=true" >> $GITHUB_OUTPUT
+        fi
+        
     - name: Generate schedule
+      if: steps.compare.outputs.changed == 'true'
       run: |
         options=""
         if [ "${{ github.event.inputs.show_headers }}" = "true" ]; then
@@ -53,13 +87,19 @@ jobs:
         python scrape_schedule.py $options
         
     - name: Upload PDF artifact
+      if: steps.compare.outputs.changed == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: symposium-schedule-pdf
         path: symposium_schedule.pdf
         
     - name: Upload JSON artifact
+      if: steps.compare.outputs.changed == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: symposium-schedule-json
         path: symposium_schedule.json
+        
+    - name: Update cache
+      if: steps.compare.outputs.changed == 'true'
+      run: cp current_hash.txt previous_hash.txt

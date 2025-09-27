@@ -7,6 +7,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from playwright.sync_api import sync_playwright
 import argparse
 import json
+import hashlib
 
 def scrape_schedule():
     url = "https://symposium.orfe.princeton.edu"
@@ -147,11 +148,15 @@ if __name__ == "__main__":
     parser.add_argument('--json', action='store_true', help="Output data as JSON instead of generating PDF.")
     parser.add_argument('--allow-breaks', action='store_true', help="Allow page breaks within room sections (default: keep rooms together).")
     parser.add_argument('--show-headers', action='store_true', help="Show table headers (Time, Presenter) in PDF.")
+    parser.add_argument('--hash', action='store_true', help="Output hash of the schedule data instead of generating files.")
     args = parser.parse_args()
     
     rooms = scrape_schedule()
     
-    if args.json:
+    if args.hash:
+        hash_obj = hashlib.sha256(json.dumps(rooms, sort_keys=True).encode())
+        print(hash_obj.hexdigest())
+    elif args.json:
         json_output = json.dumps(rooms, indent=2)
         with open("symposium_schedule.json", "w") as f:
             f.write(json_output)
