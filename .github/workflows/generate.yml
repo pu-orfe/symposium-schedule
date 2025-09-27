@@ -187,12 +187,21 @@ jobs:
         name: symposium-schedule-json
         path: symposium_schedule.json
         
+    - name: Delete existing release
+      if: steps.compare.outputs.changed == 'true' || github.event.inputs.force_generate == 'true'
+      run: |
+        if gh release view latest >/dev/null 2>&1; then
+          gh release delete latest --yes || true
+        fi
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
     - name: Create Release
       if: steps.compare.outputs.changed == 'true' || github.event.inputs.force_generate == 'true'
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: schedule-${{ github.run_number }}-${{ github.run_attempt }}
-        name: Symposium Schedule ${{ github.run_number }}
+        tag_name: latest
+        name: Symposium Schedule
         body: |
           Latest Princeton ORFE Thesis Symposium schedule generated on ${{ github.event.head_commit.timestamp }}
           
