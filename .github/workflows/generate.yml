@@ -46,10 +46,13 @@ on:
         - 'true'
         - 'false'
 
+env:
+  SCHEDULE_SOURCE: ${{ vars.SCHEDULE_SOURCE }}
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

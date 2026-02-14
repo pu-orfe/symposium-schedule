@@ -14,8 +14,15 @@ import tempfile
 import os
 import sys
 
-def scrape_schedule():
-    url = "https://symposium.orfe.princeton.edu"
+DEFAULT_URL = "https://symposium.orfe.princeton.edu"
+
+def get_schedule_url():
+    """Get the schedule URL from environment variable or use default."""
+    return os.environ.get('SCHEDULE_SOURCE', DEFAULT_URL) or DEFAULT_URL
+
+def scrape_schedule(url=None):
+    if url is None:
+        url = get_schedule_url()
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36')
@@ -62,12 +69,15 @@ def scrape_schedule():
         i += 1
     return rooms
 
-def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_title=True, qr_codes=False):
+def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_title=True, qr_codes=False, base_url=None):
+    if base_url is None:
+        base_url = get_schedule_url()
+
     doc = SimpleDocTemplate(filename, pagesize=letter)
     styles = getSampleStyleSheet()
     title_style = styles['Title']
     heading_style = styles['Heading2']
-    
+
     # Custom style for table text and advisors/graders
     table_style = ParagraphStyle(
         'TableStyle',
@@ -76,7 +86,7 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
         fontName='Helvetica',
         leading=20,  # Increased line spacing
     )
-    
+
     # Custom style for room titles
     room_style = ParagraphStyle(
         'RoomStyle',
@@ -85,8 +95,6 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
         fontName='Helvetica-Bold',
         spaceAfter=12,
     )
-    
-    url = "https://symposium.orfe.princeton.edu"
     
     story = []
     if include_title:
@@ -99,7 +107,7 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
         room_elements = []
         
         if qr_codes:
-            qr_data = f"{url}#_{room}---Sherrerd-Hall"
+            qr_data = f"{base_url}#_{room}---Sherrerd-Hall"
             qr = qrcode.QRCode(version=1, box_size=10, border=5)
             qr.add_data(qr_data)
             qr.make(fit=True)
