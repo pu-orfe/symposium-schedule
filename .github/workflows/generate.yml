@@ -32,7 +32,7 @@ on:
       qr_codes:
         description: 'Include QR codes linking to room anchors'
         required: false
-        default: 'false'
+        default: 'true'
         type: choice
         options:
         - 'true'
@@ -173,7 +173,12 @@ jobs:
         if [ "${{ github.event.inputs.include_title }}" = "false" ]; then
           options="$options --no-title"
         fi
-        if [ "${{ github.event.inputs.qr_codes }}" = "true" ]; then
+        # QR codes: use input if set, otherwise repo variable, otherwise default to true
+        qr_codes="${{ github.event.inputs.qr_codes }}"
+        if [ -z "$qr_codes" ]; then
+          qr_codes="${{ vars.QR_CODES }}"
+        fi
+        if [ -z "$qr_codes" ] || [ "$qr_codes" = "true" ]; then
           options="$options --qr-codes"
         fi
         python scrape_schedule.py $options
