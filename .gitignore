@@ -136,3 +136,6 @@ symposium_schedule.json
 # Claude Code
 CLAUDE.md
 .claude/
+
+# macOS
+.DS_Store
