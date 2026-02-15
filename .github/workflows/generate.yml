@@ -48,10 +48,52 @@ on:
 
 env:
   SCHEDULE_SOURCE: ${{ vars.SCHEDULE_SOURCE }}
+  RATE_LIMIT_MINUTES: 5
 
 jobs:
+  rate-limit:
+    runs-on: ubuntu-latest
+    outputs:
+      should_proceed: ${{ steps.check.outputs.should_proceed }}
+    steps:
+    - name: Check rate limit
+      id: check
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Always allow push events and bypass with force_generate
+        if [ "${{ github.event_name }}" = "push" ]; then
+          echo "Push event - bypassing rate limit"
+          echo "should_proceed=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        if [ "${{ github.event.inputs.force_generate }}" = "true" ]; then
+          echo "Force generate requested - bypassing rate limit"
+          echo "should_proceed=true" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        # Check for recent successful runs (within RATE_LIMIT_MINUTES)
+        cutoff=$(date -u -d "${{ env.RATE_LIMIT_MINUTES }} minutes ago" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-${{ env.RATE_LIMIT_MINUTES }}M +%Y-%m-%dT%H:%M:%SZ)
+
+        recent_runs=$(gh api \
+          -H "Accept: application/vnd.github+json" \
+          "/repos/${{ github.repository }}/actions/workflows/generate.yml/runs?status=success&per_page=5" \
+          --jq ".workflow_runs[] | select(.created_at > \"$cutoff\") | .id" | head -1)
+
+        if [ -n "$recent_runs" ]; then
+          echo "Rate limited: A successful run completed within the last ${{ env.RATE_LIMIT_MINUTES }} minutes (run $recent_runs)"
+          echo "should_proceed=false" >> $GITHUB_OUTPUT
+        else
+          echo "No recent runs found - proceeding"
+          echo "should_proceed=true" >> $GITHUB_OUTPUT
+        fi
+
   test:
     runs-on: ubuntu-latest
+    needs: rate-limit
+    if: needs.rate-limit.outputs.should_proceed == 'true'
 
     steps:
     - name: Checkout code
