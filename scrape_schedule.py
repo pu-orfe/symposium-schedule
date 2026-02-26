@@ -1,7 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from playwright.sync_api import sync_playwright
@@ -205,6 +205,174 @@ def create_pdf(rooms, filename, keep_together=True, show_headers=False, include_
         except OSError:
             pass  # Ignore if file already deleted
 
+def _shorten_time(time_str):
+    """Extract just the start time from a time range like '9:00 am – 9:15 am' -> '9:00 am'."""
+    for sep in [' – ', ' - ', '–', '-']:
+        if sep in time_str:
+            return time_str.split(sep)[0].strip()
+    return time_str.strip()
+
+def create_grid_pdf(rooms, filename, include_title=True):
+    """Generate a landscape grid PDF showing all rooms side by side, matching the xlsx layout."""
+    page_width, page_height = landscape(letter)
+    doc = SimpleDocTemplate(
+        filename,
+        pagesize=landscape(letter),
+        leftMargin=36,
+        rightMargin=36,
+        topMargin=36,
+        bottomMargin=36,
+    )
+    styles = getSampleStyleSheet()
+
+    # Collect all unique time slots in order, and detect break rows
+    all_times = []
+    seen = set()
+    break_keywords = ['break', 'photo', 'lunch']
+    for room in sorted(rooms.keys()):
+        for time_str, presenter in rooms[room]['schedule']:
+            if time_str not in seen:
+                seen.add(time_str)
+                all_times.append(time_str)
+
+    # Build lookup: room -> {time_str: presenter}
+    sorted_rooms = sorted(rooms.keys())
+    room_schedules = {}
+    for room in sorted_rooms:
+        room_schedules[room] = {}
+        for time_str, presenter in rooms[room]['schedule']:
+            room_schedules[room][time_str] = presenter
+
+    usable_width = page_width - 72  # account for margins
+    time_col_width = 80
+    room_col_width = (usable_width - time_col_width) / len(sorted_rooms)
+
+    col_widths = [time_col_width] + [room_col_width] * len(sorted_rooms)
+
+    # Paragraph styles for cells
+    cell_style = ParagraphStyle(
+        'GridCell', parent=styles['Normal'],
+        fontSize=9, fontName='Helvetica', alignment=1,  # center
+        leading=11,
+    )
+    cell_bold = ParagraphStyle(
+        'GridCellBold', parent=cell_style,
+        fontName='Helvetica-Bold',
+    )
+    header_style = ParagraphStyle(
+        'GridHeader', parent=styles['Normal'],
+        fontSize=10, fontName='Helvetica-Bold', alignment=1,
+        leading=12,
+    )
+    advisor_style = ParagraphStyle(
+        'GridAdvisor', parent=styles['Normal'],
+        fontSize=7, fontName='Helvetica', alignment=1,
+        leading=9,
+    )
+    advisor_label_style = ParagraphStyle(
+        'GridAdvisorLabel', parent=advisor_style,
+        fontName='Helvetica-Bold',
+    )
+    title_style = ParagraphStyle(
+        'GridTitle', parent=styles['Title'],
+        fontSize=16, fontName='Helvetica-Bold', alignment=1,
+        leading=20,
+    )
+    break_style = ParagraphStyle(
+        'GridBreak', parent=cell_style,
+        fontName='Helvetica-Bold',
+    )
+
+    story = []
+    if include_title:
+        story.append(Paragraph("Class of 2026 ORFE Thesis Symposium Schedule", title_style))
+        story.append(Spacer(1, 8))
+
+    # Build the grid table data
+    table_data = []
+
+    # Row 1: Room headers
+    header_row = [Paragraph('', header_style)]
+    for room in sorted_rooms:
+        header_row.append(Paragraph(f'SH {room}', header_style))
+    table_data.append(header_row)
+
+    # Row 2: Advisors
+    advisor_row = [Paragraph('ORFE Advisors', advisor_label_style)]
+    for room in sorted_rooms:
+        advisor_text = rooms[room].get('advisors', '')
+        # Strip the "ORFE Advisors:" prefix if present
+        advisor_text = advisor_text.replace('ORFE Advisors:', '').strip()
+        advisor_row.append(Paragraph(advisor_text, advisor_style))
+    table_data.append(advisor_row)
+
+    # Row 3: Graders
+    grader_row = [Paragraph('PhD Graders', advisor_label_style)]
+    for room in sorted_rooms:
+        grader_text = rooms[room].get('graders', '')
+        grader_text = grader_text.replace('PhD Candidate Graders:', '').strip()
+        grader_row.append(Paragraph(grader_text, advisor_style))
+    table_data.append(grader_row)
+
+    # Data rows: time slots
+    for time_str in all_times:
+        row = [Paragraph(_shorten_time(time_str), cell_style)]
+        is_break = False
+        for room in sorted_rooms:
+            presenter = room_schedules[room].get(time_str, '')
+            if any(kw in presenter.lower() for kw in break_keywords):
+                is_break = True
+            row.append(Paragraph(presenter, break_style if any(kw in presenter.lower() for kw in break_keywords) else cell_style))
+        table_data.append(row)
+
+    grid_table = Table(table_data, colWidths=col_widths)
+
+    # Determine which data rows are break rows (offset by 3 header rows)
+    grid_styles = [
+        # Header row
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+
+        # Advisor row
+        ('BACKGROUND', (1, 1), (-1, 1), colors.HexColor('#D9E2F3')),
+        # Grader row
+        ('BACKGROUND', (1, 2), (-1, 2), colors.HexColor('#E2EFDA')),
+        # Label column background for advisor/grader rows
+        ('BACKGROUND', (0, 1), (0, 2), colors.HexColor('#F2F2F2')),
+
+        # Global styles
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+    ]
+
+    # Alternating row backgrounds for data rows, highlight breaks
+    header_rows = 3  # room header + advisors + graders
+    for idx, time_str in enumerate(all_times):
+        row_idx = header_rows + idx
+        # Check if this is a break row
+        row_is_break = False
+        for room in sorted_rooms:
+            presenter = room_schedules[room].get(time_str, '')
+            if any(kw in presenter.lower() for kw in break_keywords):
+                row_is_break = True
+                break
+        if row_is_break:
+            grid_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#FFF2CC')))
+        elif idx % 2 == 1:
+            grid_styles.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#F8F8F8')))
+
+    grid_table.setStyle(TableStyle(grid_styles))
+    story.append(grid_table)
+
+    doc.build(story)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scrape symposium schedule and generate PDF or JSON.")
     parser.add_argument('--json', action='store_true', help="Output data as JSON instead of generating PDF.")
@@ -213,6 +381,7 @@ if __name__ == "__main__":
     parser.add_argument('--hash', action='store_true', help="Output hash of the schedule data instead of generating files.")
     parser.add_argument('--no-title', action='store_true', help="Exclude the title from PDF output.")
     parser.add_argument('--qr-codes', action='store_true', help="Include QR codes linking to each room's webpage anchor.")
+    parser.add_argument('--grid', action='store_true', help="Generate a landscape grid PDF with all rooms side by side.")
     args = parser.parse_args()
     
     try:
@@ -234,5 +403,9 @@ if __name__ == "__main__":
         print(json_output)
         # Also generate PDF when --json is specified
         create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title, qr_codes=args.qr_codes)
+        if args.grid:
+            create_grid_pdf(rooms, "symposium_schedule_grid.pdf", include_title=not args.no_title)
     else:
         create_pdf(rooms, "symposium_schedule.pdf", keep_together=not args.allow_breaks, show_headers=args.show_headers, include_title=not args.no_title, qr_codes=args.qr_codes)
+        if args.grid:
+            create_grid_pdf(rooms, "symposium_schedule_grid.pdf", include_title=not args.no_title)

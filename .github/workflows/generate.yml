@@ -37,6 +37,14 @@ on:
         options:
         - 'true'
         - 'false'
+      grid_pdf:
+        description: 'Generate landscape grid PDF with all rooms side by side'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
       force_generate:
         description: 'Force generation and release even if no changes detected'
         required: false
@@ -224,6 +232,11 @@ jobs:
         if [ -z "$qr_codes" ] || [ "$qr_codes" = "true" ]; then
           options="$options --qr-codes"
         fi
+        # Grid PDF: use input if set, otherwise default to true
+        grid_pdf="${{ github.event.inputs.grid_pdf }}"
+        if [ -z "$grid_pdf" ] || [ "$grid_pdf" = "true" ]; then
+          options="$options --grid"
+        fi
         python scrape_schedule.py $options
         
     - name: Upload PDF artifact
@@ -232,6 +245,14 @@ jobs:
       with:
         name: symposium-schedule-pdf
         path: symposium_schedule.pdf
+
+    - name: Upload Grid PDF artifact
+      if: steps.compare.outputs.changed == 'true' || github.event.inputs.force_generate == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: symposium-schedule-grid-pdf
+        path: symposium_schedule_grid.pdf
+        if-no-files-found: ignore
 
     - name: Upload JSON artifact
       if: steps.compare.outputs.changed == 'true' || github.event.inputs.force_generate == 'true'
@@ -257,15 +278,18 @@ jobs:
         name: Symposium Schedule
         body: |
           Latest Princeton ORFE Thesis Symposium schedule generated on ${{ github.event.head_commit.timestamp }}
-          
+
           **Files:**
           - `symposium_schedule.pdf` - PDF version with QR codes
+          - `symposium_schedule_grid.pdf` - Landscape grid PDF with all rooms side by side
           - `symposium_schedule.json` - JSON data for programmatic access
-          
+
           Generated from commit: ${{ github.sha }}
           ${{ github.event.inputs.force_generate == 'true' && '\n**Forced Generation:** This release was manually triggered despite no schedule changes.' || '' }}
+        fail_on_unmatched_files: false
         files: |
           symposium_schedule.pdf
+          symposium_schedule_grid.pdf
           symposium_schedule.json
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

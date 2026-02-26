@@ -131,6 +131,7 @@ dmypy.json
 
 # Generated files
 symposium_schedule.pdf
+symposium_schedule_grid.pdf
 symposium_schedule.json
 
 # Claude Code
