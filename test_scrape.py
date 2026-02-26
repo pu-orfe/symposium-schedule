@@ -3,7 +3,8 @@ import json
 import argparse
 import hashlib
 from unittest.mock import patch, MagicMock
-from scrape_schedule import scrape_schedule, create_pdf
+from reportlab.platypus import Table
+from scrape_schedule import scrape_schedule, create_pdf, create_grid_pdf, _shorten_time
 
 class TestScrapeSchedule(unittest.TestCase):
     def test_scrape_returns_dict(self):
@@ -102,6 +103,101 @@ class TestScrapeSchedule(unittest.TestCase):
         mock_doc_template.assert_called_once()
         mock_doc.build.assert_called_once()
 
+    @patch('scrape_schedule.SimpleDocTemplate')
+    def test_create_grid_pdf_basic(self, mock_doc_template):
+        """Test grid PDF creation with basic options."""
+        mock_doc = MagicMock()
+        mock_doc_template.return_value = mock_doc
+
+        rooms = scrape_schedule()
+        create_grid_pdf(rooms, "test_grid.pdf")
+
+        mock_doc_template.assert_called_once()
+        mock_doc.build.assert_called_once()
+        # Verify landscape orientation was used (page width > height)
+        call_kwargs = mock_doc_template.call_args
+        pagesize = call_kwargs[1].get('pagesize') if call_kwargs[1] else None
+        if pagesize:
+            self.assertGreater(pagesize[0], pagesize[1])
+
+    @patch('scrape_schedule.SimpleDocTemplate')
+    def test_create_grid_pdf_without_title(self, mock_doc_template):
+        """Test grid PDF creation without title."""
+        mock_doc = MagicMock()
+        mock_doc_template.return_value = mock_doc
+
+        rooms = scrape_schedule()
+        create_grid_pdf(rooms, "test_grid.pdf", include_title=False)
+
+        mock_doc_template.assert_called_once()
+        mock_doc.build.assert_called_once()
+
+    @patch('scrape_schedule.SimpleDocTemplate')
+    def test_create_grid_pdf_has_all_rooms(self, mock_doc_template):
+        """Test grid PDF includes all rooms as columns."""
+        mock_doc = MagicMock()
+        mock_doc_template.return_value = mock_doc
+
+        rooms = scrape_schedule()
+        create_grid_pdf(rooms, "test_grid.pdf")
+
+        # Inspect the story passed to build
+        build_call = mock_doc.build.call_args
+        story = build_call[0][0]
+        # Find the Table in the story (skip title Paragraph and Spacer)
+        grid_table = None
+        for element in story:
+            if isinstance(element, Table):
+                grid_table = element
+                break
+        self.assertIsNotNone(grid_table)
+        # The header row should have len(rooms) + 1 columns (time col + room cols)
+        header_row = grid_table._cellvalues[0]
+        self.assertEqual(len(header_row), len(rooms) + 1)
+
+    def test_shorten_time_range(self):
+        """Test that time range strings are shortened to start time only."""
+        self.assertEqual(_shorten_time('9:00 am – 9:15 am'), '9:00 am')
+        self.assertEqual(_shorten_time('10:15 am – 10:45 am'), '10:15 am')
+        self.assertEqual(_shorten_time('1:00 pm – 1:15 pm'), '1:00 pm')
+
+    def test_shorten_time_no_range(self):
+        """Test that non-range time strings pass through unchanged."""
+        self.assertEqual(_shorten_time('Lunch in Atrium'), 'Lunch in Atrium')
+        self.assertEqual(_shorten_time('10:00 am'), '10:00 am')
+
+    @patch('scrape_schedule.SimpleDocTemplate')
+    def test_create_grid_pdf_uses_short_times(self, mock_doc_template):
+        """Test that grid PDF displays shortened start times, not full ranges."""
+        mock_doc = MagicMock()
+        mock_doc_template.return_value = mock_doc
+
+        rooms = {
+            '101': {
+                'advisors': 'ORFE Advisors: Smith',
+                'graders': 'PhD Candidate Graders: Jones',
+                'schedule': [
+                    ('9:00 am – 9:15 am', 'Alice'),
+                    ('9:15 am – 9:30 am', 'Bob'),
+                ],
+            }
+        }
+        create_grid_pdf(rooms, "test_grid.pdf")
+
+        build_call = mock_doc.build.call_args
+        story = build_call[0][0]
+        grid_table = None
+        for element in story:
+            if isinstance(element, Table):
+                grid_table = element
+                break
+        self.assertIsNotNone(grid_table)
+        # Row index 3 is the first data row (after header, advisors, graders)
+        time_cell = grid_table._cellvalues[3][0]
+        # The Paragraph text should be the shortened time
+        self.assertIn('9:00 am', time_cell.text)
+        self.assertNotIn('9:15 am', time_cell.text)
+
     def test_command_line_parsing(self):
         """Test command line argument parsing."""
         parser = argparse.ArgumentParser(description="Scrape symposium schedule and generate PDF or JSON.")
@@ -111,7 +207,8 @@ class TestScrapeSchedule(unittest.TestCase):
         parser.add_argument('--hash', action='store_true', help="Output hash of the schedule data instead of generating files.")
         parser.add_argument('--no-title', action='store_true', help="Exclude the title from PDF output.")
         parser.add_argument('--qr-codes', action='store_true', help="Include QR codes linking to each room's webpage anchor.")
-        
+        parser.add_argument('--grid', action='store_true', help="Generate a landscape grid PDF with all rooms side by side.")
+
         # Test default arguments
         args = parser.parse_args([])
         self.assertFalse(args.json)
@@ -120,15 +217,17 @@ class TestScrapeSchedule(unittest.TestCase):
         self.assertFalse(args.hash)
         self.assertFalse(args.no_title)
         self.assertFalse(args.qr_codes)
-        
+        self.assertFalse(args.grid)
+
         # Test all flags set
-        args = parser.parse_args(['--json', '--allow-breaks', '--show-headers', '--hash', '--no-title', '--qr-codes'])
+        args = parser.parse_args(['--json', '--allow-breaks', '--show-headers', '--hash', '--no-title', '--qr-codes', '--grid'])
         self.assertTrue(args.json)
         self.assertTrue(args.allow_breaks)
         self.assertTrue(args.show_headers)
         self.assertTrue(args.hash)
         self.assertTrue(args.no_title)
         self.assertTrue(args.qr_codes)
+        self.assertTrue(args.grid)
 
     @patch('scrape_schedule.sync_playwright')
     def test_maintenance_mode_detection(self, mock_playwright):
