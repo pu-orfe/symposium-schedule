@@ -68,6 +68,12 @@ python scrape_schedule.py --qr-codes
 ```
 Includes QR codes for each room that link to the room's anchor on the webpage.
 
+### Generate landscape grid PDF
+```bash
+python scrape_schedule.py --grid
+```
+Creates `symposium_schedule_grid.pdf` with all rooms side by side in a landscape table layout.
+
 ### Run tests
 ```bash
 python -m unittest test_scrape.py -v
@@ -121,21 +127,31 @@ python -m unittest test_scrape.py
 
 This project is for educational purposes. Please respect the website's terms of service and Princeton University's policies.
 
-## GitHub Actions Workflow
+## GitHub Actions Workflows
 
-This repository includes a GitHub Actions workflow that can generate the PDF and JSON outputs automatically.
+### Generate Symposium Schedule
+Automatically generates PDF and JSON outputs. Triggers on:
+- **Push to main** — regenerates on every commit
+- **Scheduled (every 30 minutes)** — polls the source website for changes and regenerates if the schedule content has been updated
+- **Manual dispatch** — run from the Actions tab with configurable options:
+  - **Show headers**: Include column headers in the PDF table
+  - **Allow breaks**: Allow page breaks within room sections
+  - **Include title**: Include the title in PDF output
+  - **QR codes**: Include QR codes linking to room anchors
+  - **Grid PDF**: Generate landscape grid PDF with all rooms side by side
+  - **Force generate**: Bypass change detection and regenerate regardless
 
-### Manual Dispatch
-Go to the Actions tab in your GitHub repository, select "Generate Symposium Schedule", and click "Run workflow". You can choose options for:
-- **Show headers**: Include column headers in the PDF table
-- **Allow breaks**: Allow page breaks within room sections
+#### Change Detection
+The workflow hashes the scraped schedule data and compares it to a cached hash from the previous run. If no changes are detected, the release step is skipped. Use **Force generate** to bypass this check.
 
-### Caching
-The workflow includes intelligent caching that checks if the source webpage has changed. If no changes are detected since the last run, the workflow exits early without regenerating the files, saving time and resources.
+#### Outputs
+The workflow produces artifacts and a GitHub Release (`latest` tag) containing:
+- `symposium_schedule.pdf` — Formatted PDF with QR codes
+- `symposium_schedule_grid.pdf` — Landscape grid PDF with all rooms side by side
+- `symposium_schedule.json` — Structured JSON data
 
-### Outputs
-The workflow generates two artifacts with stable download URLs:
-- `symposium-schedule-pdf`: Contains the formatted PDF
-- `symposium-schedule-json`: Contains the structured JSON data
-
-These artifacts are available for download from the workflow run page.
+### Tests
+Runs the full test suite on pushes to main and pull requests. Tests can also be run locally via Docker:
+```bash
+docker build -f Dockerfile.test -t symposium-test . && docker run --rm symposium-test
+```
