@@ -379,11 +379,12 @@ if __name__ == "__main__":
     parser.add_argument('--allow-breaks', action='store_true', help="Allow page breaks within room sections (default: keep rooms together).")
     parser.add_argument('--show-headers', action='store_true', help="Show table headers (Time, Presenter) in PDF.")
     parser.add_argument('--hash', action='store_true', help="Output hash of the schedule data instead of generating files.")
+    parser.add_argument('--hash-file', type=str, help="Write hash to file as a side effect during generation.")
     parser.add_argument('--no-title', action='store_true', help="Exclude the title from PDF output.")
     parser.add_argument('--qr-codes', action='store_true', help="Include QR codes linking to each room's webpage anchor.")
     parser.add_argument('--grid', action='store_true', help="Generate a landscape grid PDF with all rooms side by side.")
     args = parser.parse_args()
-    
+
     try:
         rooms = scrape_schedule()
     except Exception as e:
@@ -392,10 +393,16 @@ if __name__ == "__main__":
             sys.exit(1)
         else:
             raise
-    
+
+    # Compute hash once, reuse for --hash, --hash-file, or both
+    schedule_hash = hashlib.sha256(json.dumps(rooms, sort_keys=True).encode()).hexdigest()
+
+    if args.hash_file:
+        with open(args.hash_file, 'w') as f:
+            f.write(schedule_hash)
+
     if args.hash:
-        hash_obj = hashlib.sha256(json.dumps(rooms, sort_keys=True).encode())
-        print(hash_obj.hexdigest())
+        print(schedule_hash)
     elif args.json:
         json_output = json.dumps(rooms, indent=2)
         with open("symposium_schedule.json", "w") as f:
