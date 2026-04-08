@@ -26,7 +26,10 @@ def scrape_schedule(url=None):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36')
-        page.goto(url)
+        bypass_hdr = os.environ.get('BYPASS_HDR')
+        if bypass_hdr:
+            page.set_extra_http_headers({bypass_hdr: 'true'})
+        page.goto(url, timeout=60000)
         page.wait_for_timeout(5000)
         content = page.content()
         browser.close()

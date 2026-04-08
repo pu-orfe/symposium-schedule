@@ -238,20 +238,54 @@ class TestScrapeSchedule(unittest.TestCase):
         # Mock the page content to contain maintenance mode text
         mock_page = MagicMock()
         mock_page.content.return_value = "<html><body>The website is currently in Maintenance Mode. Please check back later.</body></html>"
-        
+
         mock_browser = MagicMock()
         mock_browser.new_page.return_value = mock_page
-        
+
         mock_context = MagicMock()
         mock_context.chromium.launch.return_value = mock_browser
         mock_playwright.return_value.__enter__.return_value = mock_context
-        
+
         # Test that maintenance mode raises exception
         with self.assertRaises(Exception) as context:
             scrape_schedule()
-        
+
         self.assertIn("Maintenance Mode", str(context.exception))
         self.assertIn("unavailable", str(context.exception))
+
+    @patch('scrape_schedule.sync_playwright')
+    def test_bypass_header_set_when_env_var_present(self, mock_playwright):
+        """Test that the bypass header is set when BYPASS_HDR env var is present."""
+        mock_page = MagicMock()
+        mock_page.content.return_value = "<html><body>No schedule data</body></html>"
+
+        mock_browser = MagicMock()
+        mock_browser.new_page.return_value = mock_page
+
+        mock_context = MagicMock()
+        mock_context.chromium.launch.return_value = mock_browser
+        mock_playwright.return_value.__enter__.return_value = mock_context
+
+        with patch.dict('os.environ', {'BYPASS_HDR': 'x-wdsoit-bot-bypass'}):
+            scrape_schedule()
+        mock_page.set_extra_http_headers.assert_called_once_with({'x-wdsoit-bot-bypass': 'true'})
+
+    @patch('scrape_schedule.sync_playwright')
+    def test_bypass_header_not_set_when_env_var_absent(self, mock_playwright):
+        """Test that no bypass header is set when BYPASS_HDR env var is absent."""
+        mock_page = MagicMock()
+        mock_page.content.return_value = "<html><body>No schedule data</body></html>"
+
+        mock_browser = MagicMock()
+        mock_browser.new_page.return_value = mock_page
+
+        mock_context = MagicMock()
+        mock_context.chromium.launch.return_value = mock_browser
+        mock_playwright.return_value.__enter__.return_value = mock_context
+
+        with patch.dict('os.environ', {}, clear=True):
+            scrape_schedule(url='https://example.com')
+        mock_page.set_extra_http_headers.assert_not_called()
 
 if __name__ == '__main__':
     unittest.main()

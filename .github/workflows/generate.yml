@@ -58,6 +58,7 @@ on:
 
 env:
   SCHEDULE_SOURCE: ${{ vars.SCHEDULE_SOURCE }}
+  BYPASS_HDR: ${{ vars.BYPASS_HDR }}
   RATE_LIMIT_MINUTES: 5
 
 jobs:
